@@ -22,14 +22,40 @@ struct BookController{
         
         switch accesser.searchBook(query: query){
         case .success(let books): completion( books, nil )
-        case .failure(let error): completion( nil, RequestError(rawValue: 401, reason: String(describing: error ) ) )
+        case .failure(let error): completion( nil, RequestError(rawValue: 500, reason: String(describing: error ) ) )
         }
         
     }
     
-    func postBook( query: BookQuery, completion: ([Book]?, RequestError?) -> Void) {
+    func postBook( query: BookQuery, completion: (GeneralResult?, RequestError?) -> Void) {
         
-        let book = Book(title: "Mituteru Yokoyama", author: "Masamune Date")
-        completion( [book], nil )
+        switch accesser.insertBook(query: query){
+        case .success(let result): completion( result, nil )
+        case .failure(let error): completion( nil, RequestError(rawValue: 500, reason: String(describing: error ) ) )
+        }
+    }
+    
+    func deleteBook( id: Int, completion: (RequestError?) -> Void) {
+        
+        switch accesser.deleteBook(identifier: id.value){
+        case .success: completion( nil )
+        case .failure(let error): completion( RequestError(rawValue: 500, reason: String(describing: error ) ) )
+        }
+    }
+    
+    func deleteBookWithQuery( search: BookSearchQuery, completion: (RequestError?) -> Void) {
+        
+        switch accesser.deleteBook(identifier: search.id){
+        case .success: completion( nil )
+        case .failure(let error): completion( RequestError(rawValue: 500, reason: String(describing: error ) ) )
+        }
+    }
+    
+    func updateBook( id: Int, query: BookQuery, completion: (GeneralResult?, RequestError?) -> Void) {
+        
+        switch accesser.updateBook(identifier: id.value, query: query) {
+        case .success(let result): completion( result, nil )
+        case .failure(let error): completion( nil, RequestError(rawValue: 500, reason: String(describing: error ) ) )
+        }
     }
 }

@@ -17,6 +17,10 @@ struct BookQuery{
 
 import KituraContracts
 
-extension BookQuery: QueryParams{
-    
+extension BookQuery: QueryParams{}
+
+struct BookSearchQuery{
+    let id: String
 }
+
+extension BookSearchQuery: QueryParams{}

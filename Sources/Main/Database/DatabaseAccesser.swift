@@ -66,10 +66,8 @@ class DatabaseAccesser{
         connection.execute(query: query) { (queryResult) in
             if queryResult.success == false, let error = queryResult.asError{
                 result = .failure(error)
-            }else if let resultSet = queryResult.asResultSet{
-                result = .success(resultSet)
             }else{
-                result = .failure( ProjectError("Unexpected error.") )
+                result = .success(queryResult.asResultSet) // ResultSet is null when query’s type is insert.
             }
             semaphore.signal()
         }
@@ -90,7 +88,7 @@ class DatabaseAccesser{
             if result.success == false{
                 error = ProjectError("Create table is failed. reason=\( String(describing: result.asError) )")
             }
-            // OK
+            semaphore.signal()
         }
         semaphore.wait()
         if let error = error{
@@ -154,42 +152,123 @@ class DatabaseAccesser{
     
     func searchBook( query: BookQuery ) -> Result<[BookModel],Error>{
         do {
+            // release connection by connection pool
             let connection = try connectionByConnectionPool()
+            
+            // Connect
             try connect(by: connection)
+            
+            // Create Query
             let table = BookTable()
-            do{
-                var select = Select(table.title, table.author, from: table)
-                    .where( table.title == query.title && table.author == query.author )
-                
-                if let limit = query.limit {
-                    select = select.limit(to: limit)
-                }
-                if let offset = query.offset {
-                    select = select.offset(offset)
-                }
-                guard let resultSet = try self.execute(by: connection, query: select) else{
-                    return .failure(ProjectError("Unexpected error."))
-                }
-                var models:[BookModel] = []
-//                resultSet.forEach { (rowsOrNil, errorOrNil) in
-//                    if errorOrNil != nil{
-//                        return
-//                    }
-//                    guard let rows = rowsOrNil as? [BookModel] else{ return }
-//                    models = rows
-//                }
-                resultSet.nextRow { (rowsOrNil, errorOrNil) in
-                    if errorOrNil != nil{
-                        return
-                    }
-                    guard let rows = rowsOrNil as? [BookModel] else{ return }
-                    models = rows
-                }
-                return .success(models)
-            }catch( let queryError as QueryError ){
-                return .failure(queryError)
+            var select = Select(table.title, table.author, from: table)
+                .where( table.title == query.title && table.author == query.author )
+            
+            if let limit = query.limit {
+                select = select.limit(to: limit)
             }
+            if let offset = query.offset {
+                select = select.offset(offset)
+            }
+            
+            // Execute query
+            guard let resultSet = try self.execute(by: connection, query: select) else{
+                return .failure(ProjectError("Unexpected error."))
+            }
+            
+            // Get result
+            var models:[BookModel] = []
+            resultSet.forEach { (rowsOrNil, errorOrNil) in
+                if errorOrNil != nil{
+                    return
+                }
+                guard let rows = rowsOrNil as? [BookModel] else{ return }
+                models = rows
+            }
+//            resultSet.nextRow { (rowsOrNil, errorOrNil) in
+//                if errorOrNil != nil{
+//                    return
+//                }
+//                guard let rows = rowsOrNil as? [BookModel] else{ return }
+//                models = rows
+//            }
+            // Done connection
+            resultSet.done()
+            
+            // Successed
+            return .success(models)
         } catch (let error){
+            // Failed
+            return .failure(error)
+        }
+    }
+    
+    func insertBook( query: BookQuery ) -> Result<GeneralResult,Error>{
+        do {
+            // Release connection by connection pool
+            let connection = try connectionByConnectionPool()
+            
+            // Connect
+            try connect(by: connection)
+            
+            // Create Query
+            let table = BookTable()
+            let insert = Insert(into: table, columns: [table.title, table.author], values: [query.title, query.author])
+            
+            // Execute query
+            _ = try execute(by: connection, query: insert) // Expect return value is nil
+            
+            // Successed
+            return .success(GeneralResult("Insert is successed."))
+        } catch (let error){
+            // Failed
+            return .failure(error)
+        }
+    }
+    
+    func deleteBook( identifier: String ) -> Result<GeneralResult,Error>{
+        do {
+            // Release connection by connection pool
+            let connection = try connectionByConnectionPool()
+            
+            // Connect
+            try connect(by: connection)
+            
+            // Create Query
+            let table = BookTable()
+            let delete = Delete(from: table)
+                            .where( table.id == identifier )
+            
+            // Execute query
+            _ = try execute(by: connection, query: delete) // Expect return value is nil
+            
+            // Successed
+            return .success(GeneralResult("Delete is successed."))
+        } catch (let error){
+            // Failed
+            return .failure(error)
+        }
+    }
+    
+    func updateBook( identifier: String, query: BookQuery ) -> Result<GeneralResult,Error>{
+        do {
+            // Release connection by connection pool
+            let connection = try connectionByConnectionPool()
+            
+            // Connect
+            try connect(by: connection)
+            
+            // Create Query
+            let table = BookTable()
+            let update = Update(table, set: [(table.title, query.title), (table.author, query.author)])
+                                .where( table.id == identifier )
+            
+            // Execute query
+            _ = try execute(by: connection, query: update) // Expect return value is nil
+            
+            // Successed
+            return .success(GeneralResult("Update is successed."))
+        } catch (let error){
+            // Failed
             return .failure(error)
         }
     }
